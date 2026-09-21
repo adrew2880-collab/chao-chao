@@ -1,0 +1,12 @@
+# Dependencies
+node_modules
+
+# Environment variables — NEVER commit real API keys
+.env
+.env.local
+.env.*.local
+
+# Build output / logs
+dist
+*.log
+npm-debug.log*

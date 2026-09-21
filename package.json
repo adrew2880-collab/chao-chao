@@ -1,0 +1,23 @@
+{
+  "name": "ciao-ciao-ai-gateway",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Vercel AI Gateway + AI SDK test project for the Ciao Ciao board game promo text generator.",
+  "scripts": {
+    "test:ai": "tsx test-ai.ts"
+  },
+  "dependencies": {
+    "@ai-sdk/openai": "^4.0.71",
+    "ai": "^7.0.107",
+    "dotenv": "^18.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true
+  }
+}
