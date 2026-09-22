@@ -119,6 +119,26 @@ button{ font-family:inherit; }
 .room-card .room-meta{ color:var(--ink-dim); font-size:.78rem; display:flex; gap:.6em; align-items:center; margin-top:.15rem; }
 .empty-note{ color:var(--ink-dim); font-size:.85rem; padding:1rem; text-align:center; border:1px dashed var(--line); border-radius:10px; }
 
+.room-card-actions{ display:flex; align-items:center; gap:.4rem; flex-shrink:0; }
+.room-menu{ position:relative; }
+.room-menu-trigger{
+  width:32px; height:32px; display:flex; align-items:center; justify-content:center;
+  background:transparent; border:1px solid var(--line); border-radius:8px;
+  font-size:1.05rem; line-height:1; color:var(--ink-dim); cursor:pointer;
+}
+.room-menu-trigger:hover{ background:var(--surface-2); color:var(--ink); }
+.room-menu-dropdown{
+  position:absolute; top:calc(100% + 6px); right:0; z-index:20; min-width:160px;
+  background:var(--surface); border:1px solid var(--line); border-radius:10px;
+  box-shadow:0 10px 28px rgba(0,0,0,.22); padding:.3rem;
+}
+.room-menu-item{
+  display:block; width:100%; text-align:left; background:transparent; border:none; border-radius:7px;
+  padding:.55em .7em; font-size:.82rem; color:var(--ink); cursor:pointer; white-space:nowrap;
+}
+.room-menu-item:hover{ background:var(--surface-2); }
+.room-menu-item.danger{ color:var(--rust); }
+
 .test-panel{ padding:1.1rem 1.3rem 1.3rem; border-style:dashed; border-color:var(--swamp); }
 .test-tag{ border-color:var(--swamp); color:var(--swamp); }
 .test-desc{ font-size:.82rem; color:var(--ink-dim); margin:0 0 .9rem; max-width:640px; }

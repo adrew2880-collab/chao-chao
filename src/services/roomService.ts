@@ -79,6 +79,21 @@ export const RoomService = {
     }
   },
 
+  // 로비의 "⋮ → 방 삭제(관리자)" 메뉴에서 호출. 비밀번호는 여기서 검사하지 않고
+  // 그대로 서버에 넘기며, 실제 검증과 삭제는 admin-delete 라우트(Admin SDK)가
+  // 전담한다 — 비밀번호 비교 로직 자체를 클라이언트 번들에 두지 않기 위해서다.
+  async adminDeleteRoom(roomId: string, password: string): Promise<void> {
+    const res = await fetch(`/api/rooms/${roomId}/admin-delete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || `방 삭제에 실패했습니다 (${res.status})`);
+    }
+  },
+
   // 순수 헬퍼(네트워크 호출 아님): 채팅 메시지 객체 하나를 만든다. 인게임 채팅(로컬
   // dispatch로 CHAT_SEND 액션에 실어 보냄)과 대기실 채팅 양쪽에서 재사용된다.
   makeChatMessage(sender: { name: string; emoji: string }, text: string): ChatMessage {

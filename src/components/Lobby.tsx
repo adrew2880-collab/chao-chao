@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { isTestMode } from '@/lib/constants';
+import type { Room } from '@/lib/types';
 import { useRoomsList } from '@/hooks/useRoomsList';
 import { RoomService } from '@/services/roomService';
 import { AiService } from '@/services/aiService';
@@ -27,6 +28,19 @@ export function Lobby({
   // 고친 핵심 버그다.
   const { rooms, error: roomsError } = useRoomsList();
   const [myRoomId, setMyRoomId] = useState<string | null>(null);
+
+  // 방 목록 각 항목의 "⋮ 관리자 메뉴" — 한 번에 하나만 열려있도록 열린 방의 id만 기억한다.
+  const [openMenuRoomId, setOpenMenuRoomId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!openMenuRoomId) return;
+    // 메뉴 바깥(다른 방 카드, 빈 화면 등)을 클릭하면 자동으로 닫는다.
+    function handleDocClick(e: MouseEvent) {
+      const target = e.target as HTMLElement | null;
+      if (!target?.closest('.room-menu')) setOpenMenuRoomId(null);
+    }
+    document.addEventListener('click', handleDocClick);
+    return () => document.removeEventListener('click', handleDocClick);
+  }, [openMenuRoomId]);
 
   // --- 방 생성/참여 중 네트워크 에러 표시 ---
   const [busy, setBusy] = useState(false);
@@ -115,6 +129,32 @@ export function Lobby({
     }
   }
 
+  /* =========================================================================
+   *  관리자 전용 방 강제 삭제 — 접속이 끊기거나 비정상 종료돼 남은 "유령 방"을
+   *  하트비트/자동 청소(10분)를 기다리지 않고 즉시 지우기 위한 수동 비상 도구.
+   *  비밀번호 자체는 여기서 비교하지 않는다 — window.prompt로 값만 받아 그대로
+   *  서버(admin-delete 라우트)에 넘기고, 실제 정답 비교는 서버에서만 이뤄진다
+   *  (RoomService.adminDeleteRoom 주석 참고). 성공하면 별도로 목록을 갱신할
+   *  필요가 없다 — useRoomsList가 Firestore를 실시간 구독 중이라 삭제되는 즉시
+   *  onSnapshot이 새 목록을 내려주고 화면에서 자동으로 사라진다.
+   * ========================================================================= */
+  async function handleAdminDelete(room: Room) {
+    setOpenMenuRoomId(null);
+    const pw = window.prompt('관리자 비밀번호를 입력하세요');
+    if (pw === null) {
+      // 입력 창을 취소함 — 틀린 비밀번호와는 구분해서 안내한다.
+      alert('권한이 없습니다.');
+      return;
+    }
+    try {
+      await RoomService.adminDeleteRoom(room.id, pw);
+      alert('방이 삭제되었습니다.');
+    } catch (err) {
+      // 서버가 비밀번호 불일치면 정확히 "비밀번호가 틀렸습니다."를 돌려준다.
+      alert(err instanceof Error ? err.message : '방 삭제에 실패했습니다.');
+    }
+  }
+
   function handleTestStart() {
     // 방장(나) + 더미 (testCount-1)명 = 총 testCount인, 전원 핫시트로 이 화면에서 직접 조작한다.
     onEnterGame(name, { playerCount: testCount, testMode: true });
@@ -196,9 +236,29 @@ export function Lobby({
                       <span className="mono">{count}/4</span>
                     </div>
                   </div>
-                  <button className="pill-btn small" disabled={count >= 4 || busy} onClick={() => handleJoin(r.id)}>
-                    {count >= 4 ? '가득 참' : '참여하기'}
-                  </button>
+                  <div className="room-card-actions">
+                    <button className="pill-btn small" disabled={count >= 4 || busy} onClick={() => handleJoin(r.id)}>
+                      {count >= 4 ? '가득 참' : '참여하기'}
+                    </button>
+                    <div className="room-menu">
+                      <button
+                        className="room-menu-trigger"
+                        aria-label="방 관리 메뉴"
+                        aria-haspopup="true"
+                        aria-expanded={openMenuRoomId === r.id}
+                        onClick={() => setOpenMenuRoomId((id) => (id === r.id ? null : r.id))}
+                      >
+                        ⋮
+                      </button>
+                      {openMenuRoomId === r.id && (
+                        <div className="room-menu-dropdown">
+                          <button className="room-menu-item danger" onClick={() => handleAdminDelete(r)}>
+                            🗑️ 방 삭제 (관리자)
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               );
             })}
