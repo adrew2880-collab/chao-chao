@@ -1,0 +1,16 @@
+// Firestore 보안 규칙 — Firebase 콘솔 > Firestore Database > 규칙 탭에 그대로 붙여넣으세요.
+//
+// 이 프로젝트는 "읽기는 누구나 허용, 쓰기는 전부 거부"로 설계했습니다. 방 생성/참여/
+// 게임 진행 등 모든 쓰기는 서버(Next.js API 라우트, firebase-admin의 서비스 계정)를
+// 통해서만 이뤄지고, 서비스 계정은 이 규칙의 적용을 받지 않기 때문에 정상 동작합니다.
+// 브라우저(클라이언트 SDK)가 규칙을 우회해 Firestore에 직접 쓰기를 시도해도 항상
+// 거부되므로, 게임 규칙(gameReducer)은 언제나 서버에서만 실행됩니다.
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /rooms/{roomId} {
+      allow read: if true;
+      allow write: if false;
+    }
+  }
+}

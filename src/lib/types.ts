@@ -33,7 +33,7 @@ export type RoundResult = {
   declared: number | null;
 };
 
-export type ChatMessage = { id: string | number; name: string; emoji: string; text: string };
+export type ChatMessage = { id: string | number; name: string; emoji: string; text: string; system?: boolean };
 
 export type DoubtChoice = 'doubt' | 'pass';
 
@@ -72,11 +72,23 @@ export type GameAction =
   | { type: 'CLEAR_TAUNT'; playerIdx: number }
   | { type: 'CHAT_SEND'; msg: ChatMessage };
 
+// 액션을 어딘가로 "보내는" 함수의 공통 타입. 로컬(테스트 모드)에서는 이게 그냥
+// useReducer의 dispatch이고, 원격(실제 방)에서는 서버 API로 POST하는 함수다 —
+// 컴포넌트 입장에서는 둘 다 "액션 객체 하나를 넘기면 끝"이라는 점이 동일하다.
+export type ActionSender = (action: GameAction) => void;
+
+export type Participant = { name: string; emoji: string };
+
+export type RoomStatus = 'waiting' | 'playing';
+
 export type Room = {
   id: string;
   name: string;
   host: string;
   locked: boolean;
-  players: number;
+  status: RoomStatus;
+  participants: Participant[];
+  lobbyChat: ChatMessage[];
+  gameState: GameState | null;
   createdAt: number;
 };

@@ -1,12 +1,11 @@
 'use client';
 
-import type { Dispatch } from 'react';
 import { canAct } from '@/lib/constants';
-import type { DoubtChoice, GameAction, Player, RoundResult } from '@/lib/types';
+import type { ActionSender, DoubtChoice, Player, RoundResult } from '@/lib/types';
 import { GameService } from '@/services/gameService';
 
 export function ResultPopup({
-  dispatch,
+  sendAction,
   result,
   opponents,
   doubtChoices,
@@ -14,8 +13,9 @@ export function ResultPopup({
   resultAcks,
   ackedCount,
   testMode,
+  myPlayerId,
 }: {
-  dispatch: Dispatch<GameAction>;
+  sendAction: ActionSender;
   result: RoundResult;
   opponents: Player[];
   doubtChoices: Record<number, DoubtChoice>;
@@ -23,6 +23,7 @@ export function ResultPopup({
   resultAcks: Record<number, boolean>;
   ackedCount: number;
   testMode: boolean;
+  myPlayerId: number;
 }) {
   return (
     // 결과 팝업: 화면 정중앙보다 살짝 위쪽에 고정(position:fixed, CSS 참고)해서 중앙 보드의
@@ -44,7 +45,7 @@ export function ResultPopup({
 
         {/* 플레이어별 투표 결과 목록: 이번 라운드에서 선언자를 제외한 상대 전원이
             "의심"과 "진행" 중 무엇을 골랐는지 한눈에 보여준다.
-            - opponents 는 GameScreen에서 이미 계산해둔 "players 중 이번 선언자가 아니고
+            - opponents 는 GameScreenView에서 이미 계산해둔 "players 중 이번 선언자가 아니고
               탈락하지 않은 사람들" 배열을 그대로 재사용한다.
             - doubtChoices 는 { 플레이어id: 'doubt' | 'pass' } 형태의 이번 라운드 최종 투표
               기록이다. reducer가 다음 턴으로 넘어갈 때(RESULT_ACK 전원 완료)까지는 초기화하지
@@ -66,18 +67,18 @@ export function ResultPopup({
 
         {/* 결과 확인 동기화 + 권한 분리: 살아있는 플레이어 전원이 [확인했어요]를 눌러야만
             (RESULT_ACK) 다음 턴으로 넘어간다. 단, 일반 모드에서는 canAct()가 "나"
-            (MY_PLAYER_ID)의 버튼만 클릭 가능하게 막아서, 남의 확인 버튼을 대신 눌러줄 수
+            (myPlayerId)의 버튼만 클릭 가능하게 막아서, 남의 확인 버튼을 대신 눌러줄 수
             없다 — 테스트 모드일 때만 전원 클릭 가능해진다. */}
         <div className="ack-row">
           {aliveInResult.map((p) => {
             const acked = !!resultAcks[p.id];
-            const clickable = canAct(p.id, testMode);
+            const clickable = canAct(p.id, testMode, myPlayerId);
             return (
               <button
                 key={p.id}
                 className={'pill-btn' + (acked ? ' ghost' : '')}
                 disabled={acked || !clickable}
-                onClick={() => GameService.ackResult(dispatch, p.id)}
+                onClick={() => GameService.ackResult(sendAction, p.id)}
               >
                 {acked ? `✅ ${p.emoji} 확인함` : clickable ? `${p.emoji} 확인했어요` : `${p.emoji} 대기 중…`}
               </button>

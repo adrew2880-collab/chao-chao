@@ -17,27 +17,31 @@ export function podiumSizeFor(playerCount: number): number {
   return playerCount + 3;
 }
 
-// 실제 멀티플레이 환경이라면 서버가 접속한 클라이언트에게 내려주는 "내 플레이어 ID".
-// 지금은 로비에서 방장으로 참가하는 사람이 항상 0번 자리(TOTEMS[0])를 차지하므로 0으로 고정한다.
-// 매크로 채팅(도발) 버튼은 이 ID를 가진 플레이어 카드에만(= 내 화면에서만) 렌더링된다.
-export const MY_PLAYER_ID = 0;
+// 테스트 모드(핫시트) 전용 상수: 테스트 모드는 항상 로컬 브라우저 한 명이 0번 자리부터
+// 모든 좌석을 직접 조작하는 모의 플레이라서, "나"는 언제나 0번으로 고정해도 된다.
+// 실제(원격) 멀티플레이에서는 이 값을 쓰지 않고, 방 생성/참여 API가 각 기기에 내려주는
+// myPlayerId를 컴포넌트 props로 그대로 전달해서 쓴다 — 기기마다 내 좌석 번호가 다르기 때문.
+export const TEST_MODE_MY_PLAYER_ID = 0;
 
 /* =========================================================================
  *  권한 분리(canAct) — "내 클릭 vs 남의 클릭 방지"
  *  -------------------------------------------------------------------------
- *  실제 멀티플레이라면 각자의 브라우저(클라이언트)는 자기 자신의 좌석(MY_PLAYER_ID)
+ *  실제 멀티플레이라면 각자의 브라우저(클라이언트)는 자기 자신의 좌석(myPlayerId)
  *  버튼만 눌러서 서버로 액션을 보낼 수 있고, 남의 좌석 버튼은 애초에 "내 화면"에
  *  없거나 비활성 상태여야 한다. 이 함수 하나가 그 규칙을 담당한다.
+ *
+ *  myPlayerId는 호출부(컴포넌트)에서 넘겨받는다 — 테스트 모드에서는 TEST_MODE_MY_PLAYER_ID(0),
+ *  실제 방에서는 서버가 방 생성/참여 시점에 내려준 내 좌석 번호다.
  *
  *  '테스트 모드(핫시트)'가 켜져 있을 때만 예외적으로 로컬 유저 한 명이 모든 좌석을
  *  대신 조작할 수 있다(모의 멀티플레이 테스트용). 이 규칙은 두 군데에 적용된다:
  *    1) DOUBT 단계의 의심/진행 투표 버튼
  *    2) RESULT 단계의 "확인했어요" 버튼
  *  항복(SURRENDER)은 이 규칙보다 더 엄격해서, 테스트 모드 여부와 상관없이 언제나
- *  MY_PLAYER_ID 본인에게만 적용된다 — GameScreen의 handleSurrender 주석 참고.
+ *  나(myPlayerId) 본인에게만 적용된다 — GameScreenView의 handleSurrender 주석 참고.
  * ========================================================================= */
-export function canAct(playerId: number, testMode: boolean): boolean {
-  return testMode || playerId === MY_PLAYER_ID;
+export function canAct(playerId: number, testMode: boolean, myPlayerId: number): boolean {
+  return testMode || playerId === myPlayerId;
 }
 
 export const TOTEMS: Totem[] = [

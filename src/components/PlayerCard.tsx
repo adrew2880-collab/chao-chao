@@ -25,7 +25,7 @@ export function PlayerCard({
         <div className="player-name">{player.name}{isMe ? ' (나)' : ''}{player.eliminated ? ' (기권)' : ''}</div>
         <div className="player-score mono">🏆 {player.score}점</div>
         {/* 매크로 채팅(도발) 버튼: 실제 멀티플레이라면 각자의 클라이언트가 남의 버튼은 아예
-            내려받지 않는 것과 같은 효과를 내기 위해, MY_PLAYER_ID 를 가진 "내" 카드 아래에만
+            내려받지 않는 것과 같은 효과를 내기 위해, myPlayerId 를 가진 "내" 카드 아래에만
             렌더링한다 — 남의 화면에는 이 버튼 뭉치가 보이지 않아야 하므로 isMe 로 게이트한다. */}
         {isMe && !isCurrent && !player.eliminated && (
           <div className="taunt-row">

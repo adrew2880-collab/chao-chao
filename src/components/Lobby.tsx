@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent } from 'react';
 import { isTestMode } from '@/lib/constants';
-import type { Room } from '@/lib/types';
+import { useRoomsList } from '@/hooks/useRoomsList';
 import { RoomService } from '@/services/roomService';
 import { AiService } from '@/services/aiService';
 import { ThemeToggle } from './ThemeToggle';
@@ -15,16 +15,22 @@ export function Lobby({
 }: {
   mode: 'light' | 'dark';
   onToggleMode: () => void;
-  onOpenWaitingRoom: (name: string, roomName: string, startCount: number) => void;
+  onOpenWaitingRoom: (name: string, roomId: string, myPlayerId: number) => void;
   onEnterGame: (name: string, opts: { playerCount: number; testMode: boolean }) => void;
 }) {
   const [name, setName] = useState('');
   const [roomName, setRoomName] = useState('');
   const [password, setPassword] = useState('');
-  // 방 목록: 하드코딩된 가짜 방 없이, 오직 내가 실제로 "방 생성하기"로 만든 방만 여기 쌓인다.
-  // 나중에 서버가 생기면 이 state는 RoomService.listRooms() 같은 구독/폴링 결과로 대체된다.
-  const [rooms, setRooms] = useState<Room[]>([]);
+  // 방 목록: Firestore의 rooms 컬렉션(status=='waiting')을 실시간 구독한다. 다른
+  // 기기에서 만든 방도 이 훅을 통해 즉시 이 목록에 나타난다 — 이전에는 이 state가
+  // 로컬 useState라서 같은 브라우저 탭 밖으로는 절대 보이지 않았던 것이 이번에
+  // 고친 핵심 버그다.
+  const { rooms, error: roomsError } = useRoomsList();
   const [myRoomId, setMyRoomId] = useState<string | null>(null);
+
+  // --- 방 생성/참여 중 네트워크 에러 표시 ---
+  const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   // --- 테스트 모드 전용 상태 (isTestMode=false면 아래 패널이 아예 렌더링되지 않으므로
   //     이 state들도 실질적으로 쓰이지 않게 된다) ---
@@ -50,20 +56,36 @@ export function Lobby({
     }
   }
 
-  function handleCreate(e: FormEvent) {
+  async function handleCreate(e: FormEvent) {
     e.preventDefault();
-    const room = RoomService.createRoom(name.trim() || '나', roomName.trim() || '이름 없는 방', password.length > 0);
-    setRooms((r) => [room, ...r]);
-    setMyRoomId(room.id);
-    // 방 생성 직후 바로 게임으로 들어가지 않고 대기실로 이동한다.
-    // 방장 혼자(1명)인 채로 대기실이 열리고, 실제 서버가 붙기 전까지는 다른 사람이
-    // 저절로 들어오지 않는다(더미 자동 입장 없음).
-    onOpenWaitingRoom(name, room.name, 1);
+    setBusy(true);
+    setActionError(null);
+    try {
+      const hostName = name.trim() || '나';
+      const { room, myPlayerId } = await RoomService.createRoom(hostName, roomName.trim() || '이름 없는 방', password.length > 0);
+      setMyRoomId(room.id);
+      // 방 생성 직후 바로 게임으로 들어가지 않고 대기실로 이동한다. 다른 사람이 실제로
+      // 참여하면(다른 기기 포함) 대기실 화면이 Firestore 구독을 통해 실시간으로 갱신된다.
+      onOpenWaitingRoom(hostName, room.id, myPlayerId);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : '방 생성에 실패했습니다.');
+    } finally {
+      setBusy(false);
+    }
   }
 
-  function handleJoin(r: Room) {
-    if (r.players >= 4) return; // 이미 인원이 찬 방은 참여할 수 없다.
-    onOpenWaitingRoom(name, r.name, r.players);
+  async function handleJoin(roomId: string) {
+    setBusy(true);
+    setActionError(null);
+    try {
+      const joinerName = name.trim() || '나';
+      const { myPlayerId } = await RoomService.joinRoom(roomId, joinerName);
+      onOpenWaitingRoom(joinerName, roomId, myPlayerId);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : '방 참여에 실패했습니다.');
+    } finally {
+      setBusy(false);
+    }
   }
 
   function handleTestStart() {
@@ -86,6 +108,8 @@ export function Lobby({
         <ThemeToggle mode={mode} onToggle={onToggleMode} />
       </div>
 
+      {actionError && <p className="mono" style={{ color: 'var(--rust)', maxWidth: 1180, margin: '0 auto .6rem' }}>⚠️ {actionError}</p>}
+
       <div className="lobby-grid">
         <div className="card form-card">
           <h3 className="panel-title"><span className="tag">CREATE</span>방 생성하기</h3>
@@ -102,29 +126,33 @@ export function Lobby({
               <label htmlFor="f-pw">비밀번호 (비워두면 공개방)</label>
               <input id="f-pw" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="선택사항" />
             </div>
-            <button type="submit" className="pill-btn">방 생성하기</button>
+            <button type="submit" className="pill-btn" disabled={busy}>{busy ? '생성 중…' : '방 생성하기'}</button>
           </form>
         </div>
 
         <div>
           <h3 className="panel-title"><span className="tag">JOIN</span>방 참여하기</h3>
           <div className="room-list">
-            {rooms.length === 0 && <div className="empty-note">열려있는 방이 없습니다. 방을 직접 만들어보세요.</div>}
-            {rooms.map((r) => (
-              <div key={r.id} className={'room-card' + (r.id === myRoomId ? ' mine' : '')}>
-                <div>
-                  <div className="room-name">{r.locked ? '🔒 ' : ''}{r.name}</div>
-                  <div className="room-meta">
-                    <span>방장 {r.host}</span>
-                    <span>·</span>
-                    <span className="mono">{r.players}/4</span>
+            {roomsError && <div className="empty-note">{roomsError}</div>}
+            {!roomsError && rooms.length === 0 && <div className="empty-note">열려있는 방이 없습니다. 방을 직접 만들어보세요.</div>}
+            {rooms.map((r) => {
+              const count = r.participants.length;
+              return (
+                <div key={r.id} className={'room-card' + (r.id === myRoomId ? ' mine' : '')}>
+                  <div>
+                    <div className="room-name">{r.locked ? '🔒 ' : ''}{r.name}</div>
+                    <div className="room-meta">
+                      <span>방장 {r.host}</span>
+                      <span>·</span>
+                      <span className="mono">{count}/4</span>
+                    </div>
                   </div>
+                  <button className="pill-btn small" disabled={count >= 4 || busy} onClick={() => handleJoin(r.id)}>
+                    {count >= 4 ? '가득 참' : '참여하기'}
+                  </button>
                 </div>
-                <button className="pill-btn small" disabled={r.players >= 4} onClick={() => handleJoin(r)}>
-                  {r.players >= 4 ? '가득 참' : '참여하기'}
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>

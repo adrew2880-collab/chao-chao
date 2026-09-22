@@ -1,10 +1,23 @@
 import { BRIDGE_LEN, TOTEMS, tokensPerPlayerFor, podiumSizeFor } from './constants';
-import type { DiceFace, GameState, Player } from './types';
+import type { DiceFace, GameState, Participant, Player } from './types';
 
 export function rollDice(): DiceFace {
   // 1~4 또는 'X'(실패) 중 하나를 균등 확률로 반환
   const faces: DiceFace[] = [1, 2, 3, 4, 'X'];
   return faces[Math.floor(Math.random() * faces.length)];
+}
+
+// 테스트 모드(핫시트) 전용: 실제 대기실 없이 "내 이름 + 인원수"만으로 더미 참가자
+// 목록을 즉석에서 만든다. makeInitialGame이 이제 실제 participants만 받으므로,
+// 예전의 "myName + playerCount → 더미 채움" 동작을 이 함수로 분리해서 테스트 모드
+// 호출부(LocalGameScreen)에서만 쓰도록 했다 — 실제(원격) 방 생성 경로는 이 함수를
+// 전혀 거치지 않는다.
+export function makeTestParticipants(myName: string, playerCount: number): Participant[] {
+  const count = Math.min(4, Math.max(2, playerCount || 4));
+  return TOTEMS.slice(0, count).map((t, i) => ({
+    name: i === 0 ? (myName && myName.trim() ? myName.trim() : '나') : t.name,
+    emoji: t.emoji,
+  }));
 }
 
 /* =========================================================================
@@ -28,15 +41,18 @@ export function rollDice(): DiceFace {
  *              이동한다. 고정 타이머로 자동 진행하지 않는다.
  *   GAMEOVER   최고 점수 플레이어(동점이면 공동 우승)를 승자로 표시한 뒤 로비로 리셋.
  * ========================================================================= */
-export function makeInitialGame(myName: string, playerCount: number): GameState {
-  // playerCount: 대기실/테스트 모드에서 2~4인으로 조절 가능. 기본값은 4인(TOTEMS 전체).
-  const count = Math.min(4, Math.max(2, playerCount || 4));
+// 실제(원격) 방: 대기실에 모인 실제 참가자 목록(participants)을 그대로 좌석 순서대로
+// 배정한다. 예전에는 "내 이름 + 인원수"만 받아서 나머지를 TOTEMS 이름으로 채웠지만,
+// 이제는 대기실에서 실제로 모인 사람들의 이름/토템을 서버(방 생성·참여 API)가 이미
+// participants 배열에 기록해두므로 그걸 그대로 좌석에 옮겨 담기만 하면 된다.
+export function makeInitialGame(participants: Participant[]): GameState {
+  const count = Math.min(4, Math.max(2, participants.length || 4));
   const podiumSize = podiumSizeFor(count);
   const tokensPerPlayer = tokensPerPlayerFor(count); // 2인→5개, 3인→6개, 4인→7개
-  const players: Player[] = TOTEMS.slice(0, count).map((t, i) => ({
+  const players: Player[] = participants.slice(0, count).map((p, i) => ({
     id: i,
-    name: i === 0 ? (myName && myName.trim() ? myName.trim() : '나') : t.name,
-    emoji: t.emoji,
+    name: p.name,
+    emoji: p.emoji,
     home: 0,
     dead: 0,
     score: 0,

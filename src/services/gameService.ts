@@ -1,41 +1,49 @@
-import type { Dispatch } from 'react';
-import type { ChatMessage, DoubtChoice, GameAction } from '@/lib/types';
+import type { ActionSender, ChatMessage, DoubtChoice } from '@/lib/types';
 
 /* GameService — 인게임 액션의 네트워크 연동 지점.
- * 지금은 각 함수가 그냥 로컬 dispatch를 호출할 뿐이지만, 실제 서버가 생기면 이
- * 함수들 내부에서 socket.emit으로 서버에 액션을 보내고, 서버가 다시 내려주는
- * "다음 상태"를 reducer가 받아 반영하는 구조로 바뀔 자리다.
  *
- *   rollDice        → socket.emit('game:roll', …)
- *   confirmDicePeek → socket.emit('game:confirmPeek', …)
- *   declare         → socket.emit('game:declare', …)
- *   vote            → socket.emit('game:vote', …)      (의심/진행)
- *   ackResult       → socket.emit('game:ack', …)        (확인했어요)
- *   surrender       → socket.emit('game:surrender', …)
+ * 각 함수는 ActionSender 타입의 send 함수 하나만 받아서 액션 객체를 넘긴다.
+ * send의 실제 구현은 호출부(컴포넌트)가 아니라 GameScreen이 testMode 여부로
+ * 결정해서 넘겨준다:
+ *   - 테스트 모드(LocalGameScreen)  → send = useReducer의 dispatch (그대로 로컬 반영)
+ *   - 실제 방(RemoteGameScreen)     → send = POST /api/games/[roomId]/action (서버가
+ *                                      gameReducer를 실행하고, 결과는 Firestore
+ *                                      onSnapshot을 통해 되돌아와 화면에 반영된다)
+ * 이 파일의 함수들은 그 차이를 몰라도 되고, 항상 "액션 객체 하나를 만들어 send에
+ * 넘긴다"는 동일한 방식으로 호출된다 — 컴포넌트 호출부도 전혀 달라지지 않는다.
  */
 export const GameService = {
-  rollDice(dispatch: Dispatch<GameAction>) {
-    dispatch({ type: 'ROLL' });
+  rollDice(send: ActionSender) {
+    send({ type: 'ROLL' });
   },
-  confirmDicePeek(dispatch: Dispatch<GameAction>) {
-    dispatch({ type: 'CONFIRM_DICE' });
+  confirmDicePeek(send: ActionSender) {
+    send({ type: 'CONFIRM_DICE' });
   },
-  declare(dispatch: Dispatch<GameAction>, num: number) {
-    dispatch({ type: 'DECLARE', num });
+  declare(send: ActionSender, num: number) {
+    send({ type: 'DECLARE', num });
   },
-  vote(dispatch: Dispatch<GameAction>, playerIdx: number, choice: DoubtChoice) {
-    dispatch({ type: 'OPPONENT_CHOICE', playerIdx, choice });
+  vote(send: ActionSender, playerIdx: number, choice: DoubtChoice) {
+    send({ type: 'OPPONENT_CHOICE', playerIdx, choice });
   },
-  ackResult(dispatch: Dispatch<GameAction>, playerIdx: number) {
-    dispatch({ type: 'RESULT_ACK', playerIdx });
+  ackResult(send: ActionSender, playerIdx: number) {
+    send({ type: 'RESULT_ACK', playerIdx });
   },
-  surrender(dispatch: Dispatch<GameAction>, playerIdx: number) {
-    dispatch({ type: 'SURRENDER', playerIdx });
+  surrender(send: ActionSender, playerIdx: number) {
+    send({ type: 'SURRENDER', playerIdx });
   },
-  taunt(dispatch: Dispatch<GameAction>, playerIdx: number, text: string) {
-    dispatch({ type: 'TAUNT', playerIdx, text });
+  taunt(send: ActionSender, playerIdx: number, text: string) {
+    send({ type: 'TAUNT', playerIdx, text });
   },
-  sendChat(dispatch: Dispatch<GameAction>, msg: ChatMessage) {
-    dispatch({ type: 'CHAT_SEND', msg });
+  clearTaunt(send: ActionSender, playerIdx: number) {
+    send({ type: 'CLEAR_TAUNT', playerIdx });
+  },
+  declareTimeout(send: ActionSender) {
+    send({ type: 'DECLARE_TIMEOUT' });
+  },
+  doubtTimeout(send: ActionSender) {
+    send({ type: 'DOUBT_TIMEOUT' });
+  },
+  sendChat(send: ActionSender, msg: ChatMessage) {
+    send({ type: 'CHAT_SEND', msg });
   },
 };
