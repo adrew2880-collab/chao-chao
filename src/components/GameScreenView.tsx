@@ -58,6 +58,28 @@ export function GameScreenView({
   } = state;
   const current = players[turn];
   const me = players[myPlayerId]; // "나" — 항복/채팅/확인 등 내 전용 액션이 이 값을 기준으로 한다.
+
+  /* =====================================================================
+   *  isMyTurn — "지금 이 화면을 보고 있는 나"와 "현재 턴인 플레이어"가 같은 사람인가.
+   *  ---------------------------------------------------------------------
+   *  실제 멀티플레이 치명적 버그(권한/시야 노출) 수정: ROLL(주사위 굴리기)과
+   *  DECLARE(숫자 선언)는 "내 좌석 버튼만 내가 조작 가능"이 아니라 "지금 턴인
+   *  사람만 조작 가능"이라는, canAct()의 "내 좌석 전용"과는 조건이 다른 권한
+   *  체크다 — 그래서 canAct(current.id, ...)로 재사용한다: 실제 방에서는
+   *  current.id === myPlayerId 일 때만 true, 테스트 모드(핫시트)에서는 한
+   *  사람이 모든 턴을 대신 조작해야 하므로 testMode가 true면 무조건 통과시킨다
+   *  (canAct의 기존 규칙과 동일한 예외).
+   *
+   *  이 값이 false인 클라이언트에서는:
+   *   - 🎲 주사위 굴리기 버튼이 아예 DOM에 마운트되지 않는다(다른 사람이 대신
+   *     굴릴 수 없도록 — 이전에는 phase==='ROLL'이기만 하면 누구나 누를 수 있었다).
+   *   - [1,2,3,4] 선언 버튼도 마찬가지로 마운트되지 않는다.
+   *   - DICE_PEEK 단계의 주사위 결과 모달 자체가 렌더링되지 않는다 — 이게 이번에
+   *     신고된 "내 턴이 아닌데 남의 주사위 결과가 보인다" 버그의 직접적인 원인과
+   *     수정 지점이다(예전에는 phase==='DICE_PEEK'이기만 하면 dice 값을 그대로
+   *     넘겨 전원에게 렌더링했다).
+   * ===================================================================== */
+  const isMyTurn = canAct(current.id, testMode, myPlayerId);
   const tauntTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const [chatDraft, setChatDraft] = useState('');
 
@@ -157,6 +179,8 @@ export function GameScreenView({
                 <div className="who">🔴 {current.name} 님의 선언{autoDeclared ? ' (시간초과 자동선언)' : ''}</div>
                 <span className="num display">{declared}</span>
               </div>
+            ) : phase === 'DICE_PEEK' ? (
+              <div className="turn-hint">🎲 {current.name}님이 주사위 결과를 확인하는 중…</div>
             ) : phase === 'ROLL' ? (
               <div className="turn-hint">➡️ {current.name}님의 차례 — 주사위를 굴려주세요</div>
             ) : phase === 'DECLARE' ? (
@@ -216,20 +240,35 @@ export function GameScreenView({
               />
             )}
 
+            {/* 액션 버튼 권한 통제: ROLL 버튼은 phase==='ROLL'이기만 하면 예전엔 누구나
+                누를 수 있었다 — isMyTurn을 추가로 검사해, 현재 턴이 아닌 클라이언트에는
+                버튼 자체를 마운트하지 않고 대기 안내 문구만 보여준다. */}
             {phase === 'ROLL' && (
-              <div style={{ display: 'flex', justifyContent: 'center', padding: '1.2rem 0' }}>
-                <button className="pill-btn" onClick={() => GameService.rollDice(sendAction)}>🎲 주사위 굴리기</button>
-              </div>
+              isMyTurn ? (
+                <div style={{ display: 'flex', justifyContent: 'center', padding: '1.2rem 0' }}>
+                  <button className="pill-btn" onClick={() => GameService.rollDice(sendAction)}>🎲 주사위 굴리기</button>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', justifyContent: 'center', padding: '1.2rem 0' }}>
+                  <p className="mono" style={{ color: 'var(--ink-dim)', fontSize: '.85rem' }}>⏳ {current.emoji} {current.name}님을 기다리는 중…</p>
+                </div>
+              )
             )}
 
+            {/* [1,2,3,4] 선언 버튼도 동일한 이유로 isMyTurn 가드를 추가한다 — 타이머 바는
+                살아있는 모두에게 공개된 정보라 그대로 보여주되, 선택 버튼만 가린다. */}
             {phase === 'DECLARE' && (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '.6rem', padding: '1rem 0' }}>
                 <div className="countdown-bar" style={{ maxWidth: 220 }}><div style={{ width: (declareRemain / DECLARE_MS * 100) + '%' }} /></div>
-                <div style={{ display: 'flex', gap: '.6rem' }}>
-                  {[1, 2, 3, 4].map((n) => (
-                    <button key={n} className="pill-btn" style={{ fontSize: '1.3rem', width: 56, height: 56, padding: 0 }} onClick={() => GameService.declare(sendAction, n)}>{n}</button>
-                  ))}
-                </div>
+                {isMyTurn ? (
+                  <div style={{ display: 'flex', gap: '.6rem' }}>
+                    {[1, 2, 3, 4].map((n) => (
+                      <button key={n} className="pill-btn" style={{ fontSize: '1.3rem', width: 56, height: 56, padding: 0 }} onClick={() => GameService.declare(sendAction, n)}>{n}</button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mono" style={{ color: 'var(--ink-dim)', fontSize: '.85rem' }}>🤫 {current.name}님이 숫자를 고르는 중…</p>
+                )}
               </div>
             )}
           </div>
@@ -240,7 +279,16 @@ export function GameScreenView({
         </div>
       </div>
 
-      {phase === 'DICE_PEEK' && <DiceModal dice={dice} onConfirm={() => GameService.confirmDicePeek(sendAction)} />}
+      {/* 주사위 결과 비공개(치명적 버그 수정): 예전에는 phase==='DICE_PEEK'이기만 하면
+          dice 값을 그대로 넘겨서 방에 있는 모든 클라이언트가 이 모달을 렌더링했다 —
+          즉 내 턴이 아닌 사람도 남이 굴린 주사위 결과를 볼 수 있었다. isMyTurn을 추가로
+          검사해서, 현재 턴이 아닌 클라이언트에는 이 모달 자체를 마운트하지 않는다
+          (dice 값도 넘기지 않으므로 DOM에도 값이 존재하지 않는다).
+          holdToPeek={testMode}: 테스트 모드(핫시트)에서만 "누르고 있어야 보이는" 물리적
+          은폐 방식을 쓰고, 실제 방에서는 이 화면을 보는 사람이 나뿐이므로 바로 보여준다. */}
+      {phase === 'DICE_PEEK' && isMyTurn && (
+        <DiceModal dice={dice} onConfirm={() => GameService.confirmDicePeek(sendAction)} holdToPeek={testMode} />
+      )}
 
       {phase === 'RESULT' && result && (
         <ResultPopup
