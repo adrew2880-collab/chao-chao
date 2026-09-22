@@ -9,8 +9,8 @@
 // (composite index)을 미리 만들어 달라고 요구하므로, 정렬(최신 방이 위로)은 서버에
 // 맡기지 않고 클라이언트에서 간단히 처리한다.
 import { useEffect, useState } from 'react';
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
-import { db } from '@/lib/firebaseClient';
+import { collection, onSnapshot, query, where, type FirestoreError } from 'firebase/firestore';
+import { getDb, getFirebaseInitError } from '@/lib/firebaseClient';
 import type { Room } from '@/lib/types';
 
 export function useRoomsList() {
@@ -19,6 +19,18 @@ export function useRoomsList() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    const db = getDb();
+    if (!db) {
+      // Firebase 클라이언트 초기화 자체가 실패한 경우(환경변수 누락 등) — 여기서
+      // Firestore 구독을 아예 시도하지 않고, 원인이 담긴 메시지를 그대로 화면에
+      // 보여준다(Lobby.tsx가 이 error를 렌더링한다).
+      const msg = getFirebaseInitError() ?? 'Firebase 초기화에 실패했습니다.';
+      console.error('[useRoomsList] Firebase가 초기화되지 않아 방 목록을 구독할 수 없습니다:', msg);
+      setError(msg);
+      setLoading(false);
+      return;
+    }
+
     const q = query(collection(db, 'rooms'), where('status', '==', 'waiting'));
     const unsub = onSnapshot(
       q,
@@ -29,9 +41,12 @@ export function useRoomsList() {
         setLoading(false);
         setError(null);
       },
-      (err) => {
-        console.error('[useRoomsList] 방 목록 구독 실패:', err);
-        setError('방 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.');
+      (err: FirestoreError) => {
+        // FirestoreError는 code(예: 'permission-denied', 'unavailable', 'invalid-argument')와
+        // message를 함께 제공한다 — 콘솔을 볼 수 없는 모바일에서도 원인을 유추할 수 있도록
+        // 화면에 코드까지 그대로 노출한다.
+        console.error('[useRoomsList] 방 목록 구독 실패:', err.code, err.message);
+        setError(`방 목록을 불러오지 못했습니다. (${err.code}: ${err.message})`);
         setLoading(false);
       }
     );

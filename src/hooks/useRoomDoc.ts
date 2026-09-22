@@ -6,8 +6,8 @@
 // 번으로 방/게임 상태 전체가 모든 기기에서 동시에 갱신된다 — WaitingRoom과
 // RemoteGameScreen이 이 훅 하나를 공유해서 쓴다.
 import { useEffect, useState } from 'react';
-import { doc, onSnapshot } from 'firebase/firestore';
-import { db } from '@/lib/firebaseClient';
+import { doc, onSnapshot, type FirestoreError } from 'firebase/firestore';
+import { getDb, getFirebaseInitError } from '@/lib/firebaseClient';
 import type { Room } from '@/lib/types';
 
 export function useRoomDoc(roomId: string | null) {
@@ -21,6 +21,16 @@ export function useRoomDoc(roomId: string | null) {
       setLoading(false);
       return;
     }
+
+    const db = getDb();
+    if (!db) {
+      const msg = getFirebaseInitError() ?? 'Firebase 초기화에 실패했습니다.';
+      console.error('[useRoomDoc] Firebase가 초기화되지 않아 방 상태를 구독할 수 없습니다:', msg);
+      setError(msg);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     const unsub = onSnapshot(
       doc(db, 'rooms', roomId),
@@ -29,9 +39,9 @@ export function useRoomDoc(roomId: string | null) {
         setLoading(false);
         setError(null);
       },
-      (err) => {
-        console.error('[useRoomDoc] 방 상태 구독 실패:', err);
-        setError('방 정보를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.');
+      (err: FirestoreError) => {
+        console.error('[useRoomDoc] 방 상태 구독 실패:', err.code, err.message);
+        setError(`방 정보를 불러오지 못했습니다. (${err.code}: ${err.message})`);
         setLoading(false);
       }
     );

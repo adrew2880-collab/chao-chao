@@ -68,7 +68,12 @@ export function Lobby({
       // 참여하면(다른 기기 포함) 대기실 화면이 Firestore 구독을 통해 실시간으로 갱신된다.
       onOpenWaitingRoom(hostName, room.id, myPlayerId);
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : '방 생성에 실패했습니다.');
+      const msg = err instanceof Error ? err.message : '방 생성에 실패했습니다.';
+      setActionError(msg);
+      // [임시 디버깅용] 모바일 브라우저는 개발자 도구 콘솔을 열어보기 어려우므로,
+      // 원인을 바로 확인할 수 있도록 alert()로도 띄운다. 문제 해결 후에는 제거해도 된다.
+      alert('방 생성 실패: ' + msg);
+      console.error('[Lobby] 방 생성 실패:', err);
     } finally {
       setBusy(false);
     }
@@ -82,7 +87,11 @@ export function Lobby({
       const { myPlayerId } = await RoomService.joinRoom(roomId, joinerName);
       onOpenWaitingRoom(joinerName, roomId, myPlayerId);
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : '방 참여에 실패했습니다.');
+      const msg = err instanceof Error ? err.message : '방 참여에 실패했습니다.';
+      setActionError(msg);
+      // [임시 디버깅용] 위 handleCreate와 동일한 이유로 alert() 추가.
+      alert('방 참여 실패: ' + msg);
+      console.error('[Lobby] 방 참여 실패:', err);
     } finally {
       setBusy(false);
     }
