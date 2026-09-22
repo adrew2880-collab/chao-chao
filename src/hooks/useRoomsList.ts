@@ -19,6 +19,15 @@ export function useRoomsList() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // 로비 화면(방 목록)을 열 때마다 백그라운드로 유령 방 청소를 한 번 트리거한다.
+    // 응답을 기다리지 않는다(fire-and-forget) — 실패해도 방 목록 자체(onSnapshot
+    // 구독)는 정상 동작하고, 다음에 누군가 로비에 들어올 때 다시 시도된다. 실제
+    // 삭제는 서버(app/api/rooms/cleanup, Admin SDK)가 하고, 그 결과가 이 구독에도
+    // onSnapshot을 통해 자동 반영된다(방금 지워진 방은 목록에서 사라진다).
+    fetch('/api/rooms/cleanup', { method: 'POST' }).catch((err) => {
+      console.error('[useRoomsList] 유령 방 청소 트리거 실패:', err);
+    });
+
     const db = getDb();
     if (!db) {
       // Firebase 클라이언트 초기화 자체가 실패한 경우(환경변수 누락 등) — 여기서

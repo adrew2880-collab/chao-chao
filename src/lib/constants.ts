@@ -5,6 +5,16 @@ export const DECLARE_MS = 3000;       // 숫자 선언 제한시간
 export const DOUBT_MS = 10000;        // 의심/진행 투표 제한시간
 export const TAUNT_MS = 2200;         // 도발 말풍선 노출 시간
 
+// --- 유령 방 청소(방 자동 삭제) 관련 타이밍 ---
+// 방의 lastActiveAt이 이 시간 이상 갱신되지 않으면 "방치된 방"으로 간주해 삭제한다.
+// (요청사항: 10분)
+export const ROOM_STALE_MS = 10 * 60 * 1000;
+// 대기실/게임 화면을 열어둔 클라이언트가 이 주기로 lastActiveAt을 갱신(하트비트)해서,
+// 실제로 사람이 화면을 보고만 있고 별다른 액션(채팅/주사위 등)을 하지 않아도 방이
+// ROOM_STALE_MS를 넘겨 조기에 청소되지 않도록 한다. ROOM_STALE_MS보다 충분히 짧게
+// 잡아서(10배 여유) 네트워크 지연이나 탭 백그라운드 스로틀링으로 한두 번 놓쳐도 안전하다.
+export const HEARTBEAT_MS = 60 * 1000;
+
 // 참여 인원에 따라 1인당 말 개수가 달라진다: 2인→5개, 3인→6개, 4인→7개.
 export function tokensPerPlayerFor(playerCount: number): number {
   return playerCount + 3;

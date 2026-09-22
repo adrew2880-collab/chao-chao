@@ -21,12 +21,23 @@ export async function POST(req: Request, { params }: { params: Promise<{ roomId:
       if (!snap.exists) throw new Error('NOT_FOUND');
       const room = snap.data() as Room;
       if (room.status !== 'waiting') throw new Error('ALREADY_STARTED');
-      if (room.participants.length >= 4) throw new Error('ROOM_FULL');
 
-      const playerIndex = room.participants.length;
+      // "나간(left) 자리"는 인원수에서 제외하고 센다 — participants 배열 길이가
+      // 아니라 실제로 남아있는 사람 수로 정원을 판단한다(leave 라우트 주석 참고:
+      // 나간 사람은 배열에서 지우지 않고 표시만 남긴다).
+      const liveCount = room.participants.filter((p) => !p.left).length;
+      if (liveCount >= 4) throw new Error('ROOM_FULL');
+
+      // 나간 사람이 있었다면 그 좌석(인덱스)을 재사용하고, 없으면 배열 끝에 새로
+      // 추가한다 — TOTEMS는 4개뿐이라 좌석 번호가 0~3 범위를 벗어나면 안 된다.
+      const freedIndex = room.participants.findIndex((p) => p.left);
+      const playerIndex = freedIndex >= 0 ? freedIndex : room.participants.length;
       const participant: Participant = { name, emoji: TOTEMS[playerIndex].emoji };
-      const participants = [...room.participants, participant];
-      tx.update(ref, { participants });
+      const participants =
+        freedIndex >= 0
+          ? room.participants.map((p, i) => (i === freedIndex ? participant : p))
+          : [...room.participants, participant];
+      tx.update(ref, { participants, lastActiveAt: Date.now() });
       return { playerIndex, roomName: room.name };
     });
 

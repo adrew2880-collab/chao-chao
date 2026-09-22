@@ -26,7 +26,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ roomId:
       const room = snap.data() as Room;
       if (!room.gameState) throw new Error('NOT_STARTED');
       const nextState = gameReducer(room.gameState, action);
-      tx.update(ref, { gameState: nextState });
+      // lastActiveAt도 함께 갱신 — 인게임 액션(주사위/선언/투표/채팅 등) 전부가 이
+      // 라우트를 거치므로, 여기 한 곳에서만 찍어도 "활동 중인 게임"이 유령 방
+      // 청소(ROOM_STALE_MS)에 걸리지 않는다.
+      tx.update(ref, { gameState: nextState, lastActiveAt: Date.now() });
     });
 
     return NextResponse.json({ ok: true });

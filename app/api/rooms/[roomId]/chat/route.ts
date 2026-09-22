@@ -25,7 +25,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ roomId:
     const ref = adminDb.collection('rooms').doc(roomId);
     // 배열 필드에 원소 하나를 원자적으로 추가한다 — 동시에 여러 명이 채팅을 보내도
     // 서로의 메시지를 덮어쓰지 않는다(트랜잭션 없이도 arrayUnion 자체가 원자적이다).
-    await ref.update({ lobbyChat: FieldValue.arrayUnion(msg) });
+    // lastActiveAt도 함께 갱신해서 채팅 중인 방이 유령 방 청소에 걸리지 않게 한다.
+    await ref.update({ lobbyChat: FieldValue.arrayUnion(msg), lastActiveAt: Date.now() });
 
     return NextResponse.json({ ok: true, msg });
   } catch (err) {

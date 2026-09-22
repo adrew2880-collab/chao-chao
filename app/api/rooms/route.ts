@@ -35,6 +35,7 @@ export async function POST(req: Request) {
       ],
       gameState: null,
       createdAt: Date.now(),
+      lastActiveAt: Date.now(), // 유령 방 청소(roomCleanup.ts)가 기준으로 쓰는 활동 시각
     };
     await ref.set(room);
 

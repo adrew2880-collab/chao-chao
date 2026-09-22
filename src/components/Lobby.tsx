@@ -182,7 +182,10 @@ export function Lobby({
             {roomsError && <div className="empty-note">{roomsError}</div>}
             {!roomsError && rooms.length === 0 && <div className="empty-note">열려있는 방이 없습니다. 방을 직접 만들어보세요.</div>}
             {rooms.map((r) => {
-              const count = r.participants.length;
+              // 나간(left:true) 참가자는 좌석 번호 유지를 위해 배열에서 지우지 않고
+              // 표시만 남겨두므로(WaitingRoom.tsx 주석 참고), 정원 표시·가득 참 판정은
+              // 배열 길이가 아니라 실제로 남아있는 인원 수로 계산해야 한다.
+              const count = r.participants.filter((p) => !p.left).length;
               return (
                 <div key={r.id} className={'room-card' + (r.id === myRoomId ? ' mine' : '')}>
                   <div>

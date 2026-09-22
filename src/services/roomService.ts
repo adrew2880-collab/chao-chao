@@ -41,6 +41,20 @@ export const RoomService = {
     return res.json();
   },
 
+  // 명시적으로 방을 나갈 때(예: 대기실의 "← 로비로" 버튼) 호출. 탭을 닫을 때
+  // 자동으로 나가는 것(useLeaveOnUnload, navigator.sendBeacon)과 서버 쪽 로직은
+  // 동일한 /leave 라우트를 공유하지만, 이건 사용자가 버튼을 눌러 페이지 안에
+  // 머무른 채로 나가는 경우라 평범한 fetch로 보낸다. 실패해도 화면 전환 자체를
+  // 막지는 않는다(어차피 결국 유령 방 청소가 정리한다) — 호출부에서 그냥
+  // .catch(console.error)로 무시하고 진행하면 된다.
+  async leaveRoom(roomId: string, myPlayerId: number): Promise<void> {
+    await fetch(`/api/rooms/${roomId}/leave`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ playerId: myPlayerId }),
+    });
+  },
+
   // 대기실 방장이 [게임 시작]을 누르면 호출. 서버가 모인 인원 그대로 gameState를
   // 만들고 방을 'playing' 상태로 바꾼다 — 이후 모든 클라이언트는 useRoomDoc 구독을
   // 통해 자동으로 게임 화면으로 전환된다(폴링 없이 실시간으로).

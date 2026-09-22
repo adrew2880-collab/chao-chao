@@ -5,7 +5,7 @@
 // 감지하고 자동으로 게임 화면으로 전환된다(WaitingRoom 컴포넌트 참고).
 import { NextResponse } from 'next/server';
 import { getAdminDb } from '@/lib/firebaseAdmin';
-import { makeInitialGame } from '@/lib/gameLogic';
+import { liveParticipantCount, makeInitialGame } from '@/lib/gameLogic';
 import type { Room } from '@/lib/types';
 
 export async function POST(_req: Request, { params }: { params: Promise<{ roomId: string }> }) {
@@ -19,9 +19,9 @@ export async function POST(_req: Request, { params }: { params: Promise<{ roomId
       if (!snap.exists) throw new Error('NOT_FOUND');
       const room = snap.data() as Room;
       if (room.status === 'playing') return; // 다른 클라이언트가 이미 시작시킴 — 조용히 통과
-      if (room.participants.length < 2) throw new Error('NOT_ENOUGH_PLAYERS');
+      if (liveParticipantCount(room.participants) < 2) throw new Error('NOT_ENOUGH_PLAYERS');
       const gameState = makeInitialGame(room.participants);
-      tx.update(ref, { status: 'playing', gameState });
+      tx.update(ref, { status: 'playing', gameState, lastActiveAt: Date.now() });
     });
 
     return NextResponse.json({ ok: true });

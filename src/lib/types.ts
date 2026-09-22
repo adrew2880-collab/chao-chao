@@ -77,7 +77,17 @@ export type GameAction =
 // 컴포넌트 입장에서는 둘 다 "액션 객체 하나를 넘기면 끝"이라는 점이 동일하다.
 export type ActionSender = (action: GameAction) => void;
 
-export type Participant = { name: string; emoji: string };
+export type Participant = {
+  name: string;
+  emoji: string;
+  // 대기실(로비)에서 나간 참가자의 자리를 표시하는 "묘비" 플래그. participants는
+  // 배열 인덱스가 곧 좌석 번호(myPlayerId)라서, 중간에 나간 사람을 배열에서
+  // splice로 지워버리면 그 뒤 인덱스에 있던 사람들의 좌석 번호가 전부 밀려 서버와
+  // 클라이언트가 서로 다른 좌석 번호를 들고 있게 된다(식별 불일치 버그). 그래서
+  // 실제로 배열에서 제거하는 대신 이 플래그만 세워 "빈 자리"로 남기고, 다음
+  // 참여자가 그 자리를 재사용한다 — src/lib/roomCleanup.ts, join/leave 라우트 참고.
+  left?: boolean;
+};
 
 export type RoomStatus = 'waiting' | 'playing';
 
@@ -91,4 +101,8 @@ export type Room = {
   lobbyChat: ChatMessage[];
   gameState: GameState | null;
   createdAt: number;
+  // 이 방에 마지막으로 "의미 있는 활동"(생성/참여/시작/채팅/인게임 액션/하트비트)이
+  // 있었던 시각(ms). 유령 방 청소(roomCleanup.ts)가 이 값을 기준으로 오래 방치된
+  // 방을 찾아 지운다.
+  lastActiveAt: number;
 };

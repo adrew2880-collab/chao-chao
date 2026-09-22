@@ -2,6 +2,8 @@
 
 import { useCallback } from 'react';
 import { useRoomDoc } from '@/hooks/useRoomDoc';
+import { useHeartbeat } from '@/hooks/useHeartbeat';
+import { useLeaveOnUnload } from '@/hooks/useLeaveOnUnload';
 import type { ActionSender } from '@/lib/types';
 import { GameScreenView } from './GameScreenView';
 
@@ -30,6 +32,13 @@ export function RemoteGameScreen({
   onExit: () => void;
 }) {
   const { room, loading, error } = useRoomDoc(roomId);
+
+  // 유령 방 청소 관련: 게임 화면을 열어둔 동안에도 하트비트를 계속 보내고(대기실과
+  // 동일한 훅), 탭을 닫거나 나가면 이 좌석을 자동 항복(SURRENDER) 처리한다 —
+  // "턴을 가진 유저가 팅기면 게임이 멈추는" 문제를 leave 라우트가 gameReducer의
+  // 기존 SURRENDER 로직을 재사용해 막아준다(남은 인원 1명이면 즉시 종료·승리 처리).
+  useHeartbeat(roomId);
+  useLeaveOnUnload(roomId, myPlayerId);
 
   const sendAction: ActionSender = useCallback(
     (action) => {

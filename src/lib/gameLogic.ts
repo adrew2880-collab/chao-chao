@@ -20,6 +20,14 @@ export function makeTestParticipants(myName: string, playerCount: number): Parti
   }));
 }
 
+// 대기실을 나간(left:true) 참가자를 제외한 실제로 남아있는 인원 수.
+// participants 배열 자체의 길이(참고: leave 라우트는 나간 사람을 배열에서 지우지
+// 않고 "나감" 표시만 남긴다 — 좌석 번호가 밀리는 걸 막기 위해서다)와는 다르다.
+// [게임 시작 가능 인원 확인]과 [게임 난이도(말 개수/시상대 크기) 산정] 양쪽에 쓰인다.
+export function liveParticipantCount(participants: Participant[]): number {
+  return participants.filter((p) => !p.left).length;
+}
+
 /* =========================================================================
  *  GAME STATE — 초기 상태 생성
  *
@@ -45,20 +53,30 @@ export function makeTestParticipants(myName: string, playerCount: number): Parti
 // 배정한다. 예전에는 "내 이름 + 인원수"만 받아서 나머지를 TOTEMS 이름으로 채웠지만,
 // 이제는 대기실에서 실제로 모인 사람들의 이름/토템을 서버(방 생성·참여 API)가 이미
 // participants 배열에 기록해두므로 그걸 그대로 좌석에 옮겨 담기만 하면 된다.
+//
+// [유령 방 청소 관련] participants 중 일부가 게임 시작 전에 나가서 left:true로
+// 표시돼 있을 수 있다(참여 후 대기실에서 이탈). 이 좌석을 배열에서 아예 빼버리면
+// 그 뒤에 앉은 다른 사람들의 좌석 번호(myPlayerId)가 밀려버리므로, 대신 "이미
+// 기권한 플레이어"로 초기화한다 — findNextTurn/hasPlayableToken이 자동으로
+// 건너뛰므로 게임 진행에는 아무 영향이 없다.
 export function makeInitialGame(participants: Participant[]): GameState {
-  const count = Math.min(4, Math.max(2, participants.length || 4));
-  const podiumSize = podiumSizeFor(count);
-  const tokensPerPlayer = tokensPerPlayerFor(count); // 2인→5개, 3인→6개, 4인→7개
-  const players: Player[] = participants.slice(0, count).map((p, i) => ({
+  const seatCount = Math.min(4, Math.max(1, participants.length));
+  const seats = participants.slice(0, seatCount);
+  // 말 개수/시상대 크기는 "실제로 남아있는" 인원 기준으로 산정한다 — 중간에 나간
+  // 좌석까지 포함해 계산하면 난이도가 의도와 달라진다.
+  const liveCount = Math.min(4, Math.max(2, liveParticipantCount(seats) || 2));
+  const podiumSize = podiumSizeFor(liveCount);
+  const tokensPerPlayer = tokensPerPlayerFor(liveCount); // 2인→5개, 3인→6개, 4인→7개
+  const players: Player[] = seats.map((p, i) => ({
     id: i,
     name: p.name,
     emoji: p.emoji,
     home: 0,
     dead: 0,
     score: 0,
-    waiting: tokensPerPlayer,
+    waiting: p.left ? 0 : tokensPerPlayer,
     pos: null,
-    eliminated: false,
+    eliminated: !!p.left,
   }));
   return {
     players,

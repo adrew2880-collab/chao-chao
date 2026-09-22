@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useRoomDoc } from '@/hooks/useRoomDoc';
+import { useHeartbeat } from '@/hooks/useHeartbeat';
+import { useLeaveOnUnload } from '@/hooks/useLeaveOnUnload';
 import { RoomService } from '@/services/roomService';
 
 /* =========================================================================
@@ -35,11 +37,26 @@ export function WaitingRoom({
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
 
+  // 유령 방 청소 관련: 이 대기실을 열어둔 동안 주기적으로 살아있음을 알리고
+  // (하트비트), 탭을 닫거나 사이트를 벗어나면 자동으로 이탈 처리되도록 등록한다.
+  useHeartbeat(roomId);
+  useLeaveOnUnload(roomId, myPlayerId);
+
   // 방 상태가 'playing'으로 바뀌는 순간(누가 시작시켰든) 이 방에 있는 모든 클라이언트가
   // 자동으로 게임 화면으로 넘어간다 — 대기실에 모여 있던 모두가 동시에 입장하게 된다.
   useEffect(() => {
     if (room?.status === 'playing') onStart();
   }, [room?.status, onStart]);
+
+  // "← 로비로" 버튼: 탭을 닫는 게 아니라 화면 안에서 명시적으로 나가는 경우라
+  // useLeaveOnUnload(pagehide/beforeunload)가 발동하지 않는다 — 그래서 여기서
+  // 직접 leaveRoom을 호출한다. 실패해도 로비 화면 전환 자체는 막지 않는다.
+  function handleCancel() {
+    RoomService.leaveRoom(roomId, myPlayerId).catch((err) => {
+      console.error('[WaitingRoom] 나가기 처리 실패:', err);
+    });
+    onCancel();
+  }
 
   async function sendChat() {
     if (!draft.trim()) return;
@@ -74,12 +91,16 @@ export function WaitingRoom({
     return (
       <div className="lobby-shell">
         <p className="mono" style={{ padding: '2rem' }}>{error || '존재하지 않는 방입니다.'}</p>
-        <button className="pill-btn ghost small" onClick={onCancel}>← 로비로</button>
+        <button className="pill-btn ghost small" onClick={handleCancel}>← 로비로</button>
       </div>
     );
   }
 
-  const participants = room.participants;
+  // 나간(left:true) 참가자는 화면에서 숨긴다 — 단, 배열 인덱스(=좌석 번호=myPlayerId)는
+  // 반드시 원본 그대로 유지해야 한다(join/leave 라우트 주석 참고). filter만 쓰면
+  // 배열이 압축되면서 인덱스가 밀려 "나"/"방장" 라벨이 엉뚱한 사람에게 붙는 버그가
+  // 생기므로, 먼저 원래 인덱스를 seat 필드에 담아둔 뒤에 필터링한다.
+  const participants = room.participants.map((p, seat) => ({ ...p, seat })).filter((p) => !p.left);
   const count = participants.length;
   const isHost = myPlayerId === 0; // 0번 좌석(방을 만든 사람)만 게임 시작 권한을 가진다.
   const canStart = isHost && count >= 2; // 최소 2명이 모였을 때만 시작 가능
@@ -91,7 +112,7 @@ export function WaitingRoom({
           <h1 className="display" style={{ fontSize: '2.1rem' }}>🚪 {room.name}</h1>
           <div className="tagline">플레이어를 기다리는 중… (최소 2명이 모여야 시작할 수 있어요)</div>
         </div>
-        <button className="pill-btn ghost small" onClick={onCancel}>← 로비로</button>
+        <button className="pill-btn ghost small" onClick={handleCancel}>← 로비로</button>
       </div>
 
       {startError && <p className="mono" style={{ color: 'var(--rust)', maxWidth: 1180, margin: '0 auto .6rem' }}>⚠️ {startError}</p>}
@@ -100,10 +121,10 @@ export function WaitingRoom({
         <div className="card form-card">
           <h3 className="panel-title"><span className="tag">{count}/4</span>참가자</h3>
           <div className="wr-list">
-            {participants.map((p, i) => {
-              const labels = [i === 0 ? '방장' : null, i === myPlayerId ? '나' : null].filter(Boolean);
+            {participants.map((p) => {
+              const labels = [p.seat === 0 ? '방장' : null, p.seat === myPlayerId ? '나' : null].filter(Boolean);
               return (
-                <div className="wr-row" key={i}>
+                <div className="wr-row" key={p.seat}>
                   <div className="totem">{p.emoji}</div>
                   <div>{p.name}{labels.length ? ` (${labels.join(', ')})` : ''}</div>
                 </div>
