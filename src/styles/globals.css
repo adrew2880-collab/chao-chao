@@ -106,6 +106,7 @@ button{ font-family:inherit; }
   font-family:var(--font-body); font-size:.95rem; color:var(--ink); outline:none;
 }
 .field input:focus{ border-color:var(--accent); }
+.field-warn{ color:var(--rust); font-size:.78rem; margin:0; }
 .form-card .pill-btn{ width:100%; margin-top:.4rem; }
 
 .room-list{ display:flex; flex-direction:column; gap:.7rem; }

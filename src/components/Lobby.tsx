@@ -31,6 +31,22 @@ export function Lobby({
   // --- 방 생성/참여 중 네트워크 에러 표시 ---
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  // 닉네임 필수 입력 검증 에러 — 방 생성/참여 양쪽 버튼에서 공통으로 쓰는 name 필드
+  // 하나를 검사하므로 에러 메시지도 하나의 state로 공유한다.
+  const [nicknameError, setNicknameError] = useState<string | null>(null);
+
+  // 방 생성/참여 두 액션 모두 시작 전에 이 함수를 거친다. 닉네임이 비어있으면
+  // nicknameError를 세팅하고 null을 반환해서 호출부가 즉시 다음 단계로 넘어가지 않고
+  // 멈추도록 한다(트림된 닉네임을 반환하면 통과).
+  function requireNickname(): string | null {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      setNicknameError('닉네임을 먼저 입력해 주세요');
+      return null;
+    }
+    setNicknameError(null);
+    return trimmed;
+  }
 
   // --- 테스트 모드 전용 상태 (isTestMode=false면 아래 패널이 아예 렌더링되지 않으므로
   //     이 state들도 실질적으로 쓰이지 않게 된다) ---
@@ -58,10 +74,11 @@ export function Lobby({
 
   async function handleCreate(e: FormEvent) {
     e.preventDefault();
+    const hostName = requireNickname();
+    if (!hostName) return; // 닉네임이 비어있으면 여기서 멈춘다 — API 호출 자체를 시작하지 않는다.
     setBusy(true);
     setActionError(null);
     try {
-      const hostName = name.trim() || '나';
       const { room, myPlayerId } = await RoomService.createRoom(hostName, roomName.trim() || '이름 없는 방', password.length > 0);
       setMyRoomId(room.id);
       // 방 생성 직후 바로 게임으로 들어가지 않고 대기실로 이동한다. 다른 사람이 실제로
@@ -80,10 +97,11 @@ export function Lobby({
   }
 
   async function handleJoin(roomId: string) {
+    const joinerName = requireNickname();
+    if (!joinerName) return; // 닉네임이 비어있으면 참여 요청 자체를 보내지 않는다.
     setBusy(true);
     setActionError(null);
     try {
-      const joinerName = name.trim() || '나';
       const { myPlayerId } = await RoomService.joinRoom(roomId, joinerName);
       onOpenWaitingRoom(joinerName, roomId, myPlayerId);
     } catch (err) {
@@ -124,8 +142,14 @@ export function Lobby({
           <h3 className="panel-title"><span className="tag">CREATE</span>방 생성하기</h3>
           <form onSubmit={handleCreate}>
             <div className="field">
-              <label htmlFor="f-name">플레이어 이름</label>
-              <input id="f-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="예: 다람쥐" />
+              <label htmlFor="f-name">플레이어 이름(닉네임) <span style={{ color: 'var(--rust)' }}>*</span></label>
+              <input
+                id="f-name"
+                value={name}
+                onChange={(e) => { setName(e.target.value); if (nicknameError) setNicknameError(null); }}
+                placeholder="예: 다람쥐"
+              />
+              {nicknameError && <p className="field-warn">⚠️ {nicknameError}</p>}
             </div>
             <div className="field">
               <label htmlFor="f-room">방 이름</label>
@@ -141,6 +165,19 @@ export function Lobby({
 
         <div>
           <h3 className="panel-title"><span className="tag">JOIN</span>방 참여하기</h3>
+          {/* 참여하기 전용 닉네임 입력칸. 생성 폼의 닉네임 입력칸과 같은 name state를
+              공유하므로 어느 쪽에 입력하든 동일한 닉네임으로 유지된다 — 두 개의 입력칸이
+              아니라 "하나의 닉네임을 두 화면에서 보여주는" 개념이다. */}
+          <div className="field">
+            <label htmlFor="f-name-join">플레이어 이름(닉네임) <span style={{ color: 'var(--rust)' }}>*</span></label>
+            <input
+              id="f-name-join"
+              value={name}
+              onChange={(e) => { setName(e.target.value); if (nicknameError) setNicknameError(null); }}
+              placeholder="예: 다람쥐"
+            />
+            {nicknameError && <p className="field-warn">⚠️ {nicknameError}</p>}
+          </div>
           <div className="room-list">
             {roomsError && <div className="empty-note">{roomsError}</div>}
             {!roomsError && rooms.length === 0 && <div className="empty-note">열려있는 방이 없습니다. 방을 직접 만들어보세요.</div>}
