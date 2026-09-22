@@ -8,5 +8,10 @@ node_modules
 
 # Build output / logs
 dist
+.next
+out
+.vercel
+next-env.d.ts
 *.log
 npm-debug.log*
+*.tsbuildinfo
