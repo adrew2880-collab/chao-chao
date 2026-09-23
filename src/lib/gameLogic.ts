@@ -2,8 +2,10 @@ import { BRIDGE_LEN, TOTEMS, tokensPerPlayerFor, podiumSizeFor } from './constan
 import type { DiceFace, GameState, Participant, Player } from './types';
 
 export function rollDice(): DiceFace {
-  // 1~4 또는 'X'(실패) 중 하나를 균등 확률로 반환
-  const faces: DiceFace[] = [1, 2, 3, 4, 'X'];
+  // 6면체 기준: 1~4가 각 1면씩(각 1/6), 'X'(꽝)가 2면(2/6 = 1/3)을 차지한다.
+  // 배열에 'X'를 두 번 넣고 6개 중 균등하게 하나를 뽑는 방식으로 확률을 구현한다 —
+  // 숫자 하나하나를 따로 조건 분기하는 것보다 한눈에 확률을 확인할 수 있다.
+  const faces: DiceFace[] = [1, 2, 3, 4, 'X', 'X'];
   return faces[Math.floor(Math.random() * faces.length)];
 }
 
@@ -102,8 +104,19 @@ export function makeInitialGame(participants: Participant[]): GameState {
 }
 
 export function advanceToken(player: Player, steps: number): Player & { arrived: boolean } {
-  // pos===null 이면 아직 대기 중인 말 하나가 다리 위로 새로 올라오는 것
+  // pos===null 이면 아직 대기 중인 말 하나가 다리 위로 새로 올라오는 것.
+  //
+  // [버그 수정] 예전에는 "대기 중인 말이 실제로 남아있는지"는 확인하지 않고
+  // pos===null이기만 하면 무조건 waiting -= 1을 했다. 그런데 대기 말도 없고(waiting=0)
+  // 다리 위 말도 없는(pos=null) — 즉 이미 가진 말을 전부 소모한 — 플레이어가 의심을
+  // 맞혀서 claim(id, 1)로 "+1칸 전진" 보상을 받으면, waiting이 -1로 내려가면서 있지도
+  // 않은 "유령 말"이 다리 위(pos=1)에 나타나는 치명적인 버그가 있었다. 보낼 말이
+  // 하나도 없으면 애초에 전진할 대상이 없으므로, 이 경우엔 아무 변화 없이 그대로
+  // 돌려준다.
   const wasWaiting = player.pos === null;
+  if (wasWaiting && player.waiting <= 0) {
+    return { ...player, arrived: false };
+  }
   let pos: number | null = (player.pos == null ? 0 : player.pos) + steps;
   let waiting = player.waiting,
     home = player.home;
@@ -114,12 +127,15 @@ export function advanceToken(player: Player, steps: number): Player & { arrived:
     pos = null; // 도착했으니 더 이상 다리 위 위치가 없다
     arrived = true;
   }
-  return { ...player, pos, waiting, home, arrived };
+  // 말 개수의 최솟값은 0 — 위 가드로 이미 음수가 될 수 없지만, 방어적으로 한 번 더 고정한다.
+  return { ...player, pos, waiting: Math.max(0, waiting), home, arrived };
 }
 
 export function killWaitingOrActive(player: Player): Player {
   // "대기 중인 말"이 우선적으로 죽는다. 대기 말이 없으면 다리 위의 말이 죽는다.
-  if (player.waiting > 0) return { ...player, waiting: player.waiting - 1, dead: player.dead + 1, fellPos: null };
+  // Math.max(0, ...)는 이미 `player.waiting > 0` 체크로 음수가 나올 수 없지만,
+  // "말 개수의 최솟값은 0"이라는 불변조건을 코드에도 명시적으로 남겨 둔다.
+  if (player.waiting > 0) return { ...player, waiting: Math.max(0, player.waiting - 1), dead: player.dead + 1, fellPos: null };
   if (player.pos != null) return { ...player, pos: null, dead: player.dead + 1, fellPos: player.pos };
   return player;
 }
@@ -127,7 +143,7 @@ export function killWaitingOrActive(player: Player): Player {
 export function killActive(player: Player): Player {
   // 다리 위 말을 우선적으로 죽인다(선언자가 거짓을 들켰을 때).
   if (player.pos != null) return { ...player, pos: null, dead: player.dead + 1, fellPos: player.pos };
-  if (player.waiting > 0) return { ...player, waiting: player.waiting - 1, dead: player.dead + 1, fellPos: null };
+  if (player.waiting > 0) return { ...player, waiting: Math.max(0, player.waiting - 1), dead: player.dead + 1, fellPos: null };
   return player;
 }
 

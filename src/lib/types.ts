@@ -70,7 +70,12 @@ export type GameAction =
   | { type: 'SURRENDER'; playerIdx: number }
   | { type: 'TAUNT'; playerIdx: number; text: string }
   | { type: 'CLEAR_TAUNT'; playerIdx: number }
-  | { type: 'CHAT_SEND'; msg: ChatMessage };
+  | { type: 'CHAT_SEND'; msg: ChatMessage }
+  // 현재 턴 플레이어가 남은 말이 하나도 없어(waiting===0 && pos===null) 아무 행동도
+  // 할 수 없을 때 턴만 다음 사람에게 넘긴다. SURRENDER(기권)와 달리 eliminated를
+  // 세우지 않는다 — 그래서 이후 다른 사람의 선언에 대한 의심/승낙 투표권은 계속
+  // 유지된다(요구사항: "남은 말이 0개라도 투표에는 참여할 수 있어야 한다").
+  | { type: 'SKIP_EMPTY_TURN' };
 
 // 액션을 어딘가로 "보내는" 함수의 공통 타입. 로컬(테스트 모드)에서는 이게 그냥
 // useReducer의 dispatch이고, 원격(실제 방)에서는 서버 API로 POST하는 함수다 —

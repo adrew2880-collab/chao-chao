@@ -31,6 +31,11 @@ export const GameService = {
   surrender(send: ActionSender, playerIdx: number) {
     send({ type: 'SURRENDER', playerIdx });
   },
+  // 말이 하나도 남지 않은 플레이어의 턴을 자동으로 넘긴다. surrender와 달리
+  // eliminated를 세우지 않으므로 의심/승낙 투표권은 계속 유지된다.
+  skipEmptyTurn(send: ActionSender) {
+    send({ type: 'SKIP_EMPTY_TURN' });
+  },
   taunt(send: ActionSender, playerIdx: number, text: string) {
     send({ type: 'TAUNT', playerIdx, text });
   },

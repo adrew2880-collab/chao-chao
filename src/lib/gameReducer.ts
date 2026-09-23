@@ -2,6 +2,7 @@ import { DECLARE_MS, DOUBT_MS } from './constants';
 import {
   computeWinners,
   findNextTurn,
+  hasPlayableToken,
   isGameOver,
   resolveRound,
   rollDice,
@@ -130,6 +131,31 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         };
       }
       return { ...state, players };
+    }
+    case 'SKIP_EMPTY_TURN': {
+      /* 남은 말이 0개(waiting===0 && pos===null)인 플레이어의 턴이 돌아왔을 때 쓰는
+       * 액션. SURRENDER(기권)와 의도적으로 분리했다 — SURRENDER는 eliminated를 세워
+       * "다른 사람의 선언에 투표할 권리"까지 함께 잃게 만들지만, 이건 "이번엔 할 수
+       * 있는 행동이 없으니 턴만 넘긴다"일 뿐이라 eliminated를 건드리지 않는다. 그래서
+       * 이 플레이어는 계속 opponents 목록에 남아 의심/승낙 투표에 참여할 수 있다
+       * (요구사항: "남은 말이 0개라도 투표에는 참여할 수 있어야 한다").
+       */
+      if (state.phase !== 'ROLL') return state;
+      const current = state.players[state.turn];
+      if (hasPlayableToken(current)) return state; // 방어: 실제로 움직일 말이 있으면 아무 것도 하지 않는다
+      if (isGameOver(state.players, state.podium, state.podiumScores.length)) {
+        return { ...state, phase: 'GAMEOVER', winners: computeWinners(state.players) };
+      }
+      const nextTurn = findNextTurn(state.players, state.turn);
+      return {
+        ...state,
+        turn: nextTurn,
+        phase: 'ROLL',
+        dice: null,
+        declared: null,
+        doubtChoices: {},
+        result: null,
+      };
     }
     case 'TAUNT': {
       return { ...state, taunts: { ...state.taunts, [action.playerIdx]: action.text } };

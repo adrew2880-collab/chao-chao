@@ -292,6 +292,14 @@ button{ font-family:inherit; }
 }
 .dice-face.peek{ transform:rotateY(360deg); background:var(--accent); color:var(--accent-ink); }
 .dice-face .back{ font-size:2.6rem; }
+/* 회전(굴리기) 연출: 테스트 모드/실제 멀티플레이 양쪽에서 동일하게 재생된다(DiceModal.tsx 참고). */
+.dice-face.spinning{ cursor:default; animation:dice-spin .5s linear infinite; background:var(--surface-2); }
+.dice-face .spin-num{ display:inline-block; opacity:.85; }
+@keyframes dice-spin{
+  0%{ transform:rotate(0deg) scale(1); }
+  50%{ transform:rotate(180deg) scale(1.12); }
+  100%{ transform:rotate(360deg) scale(1); }
+}
 
 /* ---- doubt panel ---- */
 .doubt-panel{ display:flex; flex-direction:column; align-items:center; gap:.6rem; padding:.6rem 0 1rem; }

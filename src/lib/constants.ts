@@ -1,9 +1,18 @@
 import type { Totem } from './types';
 
 export const BRIDGE_LEN = 9;          // 징검다리 칸 수
-export const DECLARE_MS = 3000;       // 숫자 선언 제한시간
-export const DOUBT_MS = 10000;        // 의심/진행 투표 제한시간
+// 실제 멀티플레이 테스트 결과, 기존 3초/10초는 서버 왕복 지연(주사위 굴리기 →
+// 서버 처리 → Firestore 쓰기 → onSnapshot으로 되돌아오기까지의 네트워크 시간)을
+// 감안하면 체감상 순식간에 지나가 버린다는 문제가 있었다. 기본 시간을 4초씩
+// 넉넉하게 늘려서 그 여유를 흡수한다.
+export const DECLARE_MS = 7000;       // 숫자 선언 제한시간 (기존 3000 + 4000)
+export const DOUBT_MS = 14000;        // 의심/진행 투표 제한시간 (기존 10000 + 4000)
 export const TAUNT_MS = 2200;         // 도발 말풍선 노출 시간
+// 주사위를 굴린 직후 "회전 중" 연출이 재생되는 시간. 테스트 모드/실제 멀티플레이
+// 양쪽에서 완전히 동일하게 사용된다(DiceModal.tsx) — 이 시간이 끝나기 전에는 결과가
+// 노출되지 않고 "확인했어요" 버튼도 비활성 상태라, DECLARE_MS 타이머는 이 연출이
+// 끝난 뒤(CONFIRM_DICE가 실제로 전송된 시점)부터만 시작된다.
+export const DICE_SPIN_MS = 900;
 
 // --- 유령 방 청소(방 자동 삭제) 관련 타이밍 ---
 // 방의 lastActiveAt이 이 시간 이상 갱신되지 않으면 "방치된 방"으로 간주해 삭제한다.

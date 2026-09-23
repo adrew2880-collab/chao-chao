@@ -69,6 +69,14 @@ export function RemoteGameScreen({
     );
   }
 
+  // 클라이언트-서버 시계 오차 보정: room.lastActiveAt은 서버가 이 gameState를 쓴
+  // "바로 그 순간"에 Date.now()로 찍은 값이다(app/api/games/[roomId]/action/route.ts가
+  // gameState와 lastActiveAt을 같은 트랜잭션에서 함께 쓴다) — 그래서 "서버 시계가
+  // 이 기기 시계보다 얼마나 빠른/느린가"의 근사치로 쓸 수 있다. declareDeadline/
+  // doubtDeadline도 같은 서버가 같은 순간에 찍은 값이라, 이 오차만큼 보정해주면
+  // 타이머가 실제보다 짧아/길어 보이는 문제를 줄일 수 있다.
+  const clockOffsetMs = room.lastActiveAt - Date.now();
+
   return (
     <GameScreenView
       state={room.gameState}
@@ -78,6 +86,7 @@ export function RemoteGameScreen({
       mode={mode}
       onToggleMode={onToggleMode}
       onExit={onExit}
+      clockOffsetMs={clockOffsetMs}
     />
   );
 }

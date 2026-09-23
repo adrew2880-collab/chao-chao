@@ -43,6 +43,7 @@ export function GameScreenView({
   mode,
   onToggleMode,
   onExit,
+  clockOffsetMs = 0,
 }: {
   state: GameState;
   sendAction: ActionSender;
@@ -51,6 +52,13 @@ export function GameScreenView({
   mode: 'light' | 'dark';
   onToggleMode: () => void;
   onExit: () => void;
+  // 이 기기의 Date.now()에 더하면 "서버 기준 지금"에 더 가까워지는 보정값(ms).
+  // 로컬(테스트 모드)에는 서버가 따로 없으므로 항상 0 — RemoteGameScreen이
+  // room.lastActiveAt(서버가 마지막 쓰기 때 찍은 시각)과 클라이언트 시계를 비교해
+  // 계산해 넘겨준다. 타이머(declareDeadline/doubtDeadline)는 서버가 Date.now()로
+  // 찍은 값이라, 클라이언트 시계가 서버보다 빠르거나 느리면 실제보다 타이머가
+  // 짧아/길어 보일 수 있는데 이 보정으로 그 오차를 줄인다.
+  clockOffsetMs?: number;
 }) {
   const {
     players, turn, phase, dice, declared, autoDeclared, declareDeadline, doubtDeadline, doubtChoices,
@@ -83,13 +91,13 @@ export function GameScreenView({
   const tauntTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const [chatDraft, setChatDraft] = useState('');
 
-  // --- 3초 선언 타이머 ---
-  const declareRemain = useCountdown(phase === 'DECLARE', declareDeadline);
-  useDeadlineFire(phase === 'DECLARE', declareDeadline, () => GameService.declareTimeout(sendAction));
+  // --- 선언 타이머(DECLARE_MS) --- clockOffsetMs를 넘겨 클라이언트-서버 시계 오차를 보정한다.
+  const declareRemain = useCountdown(phase === 'DECLARE', declareDeadline, clockOffsetMs);
+  useDeadlineFire(phase === 'DECLARE', declareDeadline, () => GameService.declareTimeout(sendAction), clockOffsetMs);
 
-  // --- 10초 의심/진행 투표 타이머 ---
-  const doubtRemain = useCountdown(phase === 'DOUBT', doubtDeadline);
-  useDeadlineFire(phase === 'DOUBT', doubtDeadline, () => GameService.doubtTimeout(sendAction));
+  // --- 의심/진행 투표 타이머(DOUBT_MS) ---
+  const doubtRemain = useCountdown(phase === 'DOUBT', doubtDeadline, clockOffsetMs);
+  useDeadlineFire(phase === 'DOUBT', doubtDeadline, () => GameService.doubtTimeout(sendAction), clockOffsetMs);
   const opponents = players.filter((p) => p.id !== turn && !p.eliminated);
   const votedCount = opponents.filter((p) => doubtChoices[p.id]).length;
 
@@ -107,14 +115,18 @@ export function GameScreenView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
-  // --- 놀릴 말이 없는 플레이어의 턴이면 자동으로 기권 처리하고 다음 턴으로 넘김 ---
+  // --- 남은 말이 없는 플레이어의 턴이면 자동으로 턴만 넘김(SKIP_EMPTY_TURN) ---
   // (이건 유저가 버튼을 누르는 게 아니라 게임 규칙이 스스로 판단하는 자동 처리이므로,
-  //  "내 클릭만 나에게 적용" 규칙과는 무관하게 current.id를 그대로 쓴다. 실제 방에서는
-  //  접속해 있는 클라이언트 여럿이 동시에 이 판단을 내려 중복으로 액션을 보낼 수 있지만,
-  //  서버의 gameReducer가 매번 최신 상태를 기준으로 재계산하므로 중복 호출은 무해하다.)
+  //  "내 클릭만 나에게 적용" 규칙과는 무관하게 진행한다. 실제 방에서는 접속해 있는
+  //  클라이언트 여럿이 동시에 이 판단을 내려 중복으로 액션을 보낼 수 있지만, 서버의
+  //  gameReducer가 매번 최신 상태를 기준으로 재계산하므로 중복 호출은 무해하다.
+  //  [버그 수정] 예전에는 GameService.surrender(current.id)를 호출해서 이 플레이어를
+  //  eliminated 처리했는데, 그러면 이후 다른 사람의 선언에 대한 의심/승낙 투표권까지
+  //  함께 사라졌다. SKIP_EMPTY_TURN은 턴만 넘기고 eliminated는 건드리지 않는다 —
+  //  요구사항: "남은 말이 0개라도 다른 사람의 턴에는 투표에 참여할 수 있어야 한다.")
   useEffect(() => {
-    if (phase === 'ROLL' && !hasPlayableToken(current) && !current.eliminated) {
-      GameService.surrender(sendAction, current.id);
+    if (phase === 'ROLL' && !current.eliminated && !hasPlayableToken(current)) {
+      GameService.skipEmptyTurn(sendAction);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, turn]);
@@ -242,15 +254,23 @@ export function GameScreenView({
 
             {/* 액션 버튼 권한 통제: ROLL 버튼은 phase==='ROLL'이기만 하면 예전엔 누구나
                 누를 수 있었다 — isMyTurn을 추가로 검사해, 현재 턴이 아닌 클라이언트에는
-                버튼 자체를 마운트하지 않고 대기 안내 문구만 보여준다. */}
+                버튼 자체를 마운트하지 않고 대기 안내 문구만 보여준다.
+                hasPlayableToken(current) 가드: 남은 말이 없는 플레이어는 애초에 굴릴 수
+                없어야 한다 — 위 useEffect(SKIP_EMPTY_TURN)가 즉시 턴을 넘기지만, 실제
+                방에서는 서버 왕복 시간만큼 짧은 틈이 있을 수 있어 렌더링에서도 한 번 더
+                막는다(요구사항: "남은 말이 0개인 플레이어는 주사위를 굴릴 수 없어야 한다"). */}
             {phase === 'ROLL' && (
-              isMyTurn ? (
+              isMyTurn && hasPlayableToken(current) ? (
                 <div style={{ display: 'flex', justifyContent: 'center', padding: '1.2rem 0' }}>
                   <button className="pill-btn" onClick={() => GameService.rollDice(sendAction)}>🎲 주사위 굴리기</button>
                 </div>
               ) : (
                 <div style={{ display: 'flex', justifyContent: 'center', padding: '1.2rem 0' }}>
-                  <p className="mono" style={{ color: 'var(--ink-dim)', fontSize: '.85rem' }}>⏳ {current.emoji} {current.name}님을 기다리는 중…</p>
+                  <p className="mono" style={{ color: 'var(--ink-dim)', fontSize: '.85rem' }}>
+                    {isMyTurn && !hasPlayableToken(current)
+                      ? '⏳ 남은 말이 없어 이번 턴은 자동으로 넘어갑니다…'
+                      : `⏳ ${current.emoji} ${current.name}님을 기다리는 중…`}
+                  </p>
                 </div>
               )
             )}
